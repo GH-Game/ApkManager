@@ -54,7 +54,6 @@ public class MainActivity extends Activity {
 
 	private String TAG = "apkm";
 	
-	
 	private List<Apk> updateList = new ArrayList<Apk>();
 
     @Override
