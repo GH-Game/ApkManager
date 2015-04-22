@@ -54,6 +54,7 @@ public class MainActivity extends Activity {
 
 	private String TAG = "apkm";
 	
+	
 	private List<Apk> updateList = new ArrayList<Apk>();
 
     @Override
@@ -76,7 +77,7 @@ public class MainActivity extends Activity {
 				}
 			} 	
         };
-        
+       
 	    edt = (EditText) findViewById(R.id.log); 
 
         printScreen("Please click 妙蛙种子 to START apkm...\n\n");
@@ -165,7 +166,6 @@ public class MainActivity extends Activity {
 			        
 		    	    for( int i = 0, len = updateList.size(); i < len; i++ ){
 		    	    	String filename = updateList.get(i).getFname();
-		    	    	String packname = updateList.get(i).getPname();
 		    	    	printScreen("\n** INSTALL " + filename + " start.");
 		    	    	
 		    	    	printScreen("*** DOWNLOAD start.");
