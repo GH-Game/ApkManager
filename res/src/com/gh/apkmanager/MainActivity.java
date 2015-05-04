@@ -24,11 +24,19 @@ import com.gh.apkmanager.utils.HttpUtils;
 import com.gh.apkmanager.utils.JsonTools;
 
 import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
+import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.os.Message;
+import android.text.Spannable;
+import android.text.SpannableStringBuilder;
+import android.text.method.ScrollingMovementMethod;
+import android.text.style.ForegroundColorSpan;
 import android.util.Log;
 import android.view.View;
 import android.view.View.OnClickListener;
@@ -40,19 +48,22 @@ import android.provider.Settings;
 
 public class MainActivity extends Activity {
 	
+	private static final String TAG = "apkm";
+	
+	private static final int ERROR = 0;
+	private static final int LOG = 1;
+	private static final int PROGRESS = 2;
+	
+	private static final String DOWNLOAD_DIR = Environment.getExternalStorageDirectory().getPath() + "/GH-Game/download/";
+	private static final String SERVER_URL = "http://192.168.2.99:3000/";
+	private static final String RESOURCE_URL = SERVER_URL + "data/";
+
 	private Handler handler;
 	
 	private TextView textView;
 	private Button button;
 	private EditText edt;
 	private Activity activity;
-	
-	//private String DOWNLOAD_DIR = Environment.getExternalStorageDirectory() + "/GH-Game/download";
-	private String DOWNLOAD_DIR = Environment.getExternalStorageDirectory().getPath() + "/GH-Game/download/";
-	//private String SERVER_URL = "http://hello13.net/projects/game/";
-	private String SERVER_URL = "http://192.168.2.169:3000/data/";
-
-	private String TAG = "apkm";
 	
 	private List<Apk> updateList = new ArrayList<Apk>();
 
@@ -67,23 +78,58 @@ public class MainActivity extends Activity {
         handler = new Handler(){
 			public void handleMessage(Message msg){			
 				switch(msg.what){
+					case 0:
+						Log.i(TAG, (String)msg.obj);
+						int length = msg.obj.toString().length();
+						
+						SpannableStringBuilder style=new SpannableStringBuilder((String)msg.obj);  
+				        style.setSpan(new ForegroundColorSpan(Color.RED),0,length,Spannable.SPAN_EXCLUSIVE_INCLUSIVE);  
+				        
+					    edt.append(style);
+					    edt.append("\n");
+					    break;
 					case 1:
 						Log.i(TAG, (String)msg.obj);
 					    edt.append((String)msg.obj + '\n');
 					    break;
+					case 2:
+						String content = edt.getText().toString();
+						String percent = (String)msg.obj;
+						
+						// 填充
+						switch(percent.length()){
+							case 1:
+								percent = "  " + percent;
+								break;
+							case 2:
+								percent = " " + percent;
+								break;
+							default:
+								break;
+						}
+				
+						int curr_len = content.length();
+						
+						StringBuffer sb = new StringBuffer(content);
+						sb.replace(curr_len - 5, curr_len - 2, percent); 
+
+						edt.setText(sb.toString());
+						break;
 					default:
 						break;
 				}
+				
+				edt.setSelection(edt.getText().length(), edt.getText().length());
 			} 	
         };
        
 	    edt = (EditText) findViewById(R.id.log); 
 
-        printScreen("Please click 妙蛙种子 to START apkm...\n\n");
+        printScreen("Please click 妙蛙种子 to START apkm...\n\n", LOG);
 
         textView = (TextView) findViewById(R.id.android_id);  
         textView.setText("Apkm's running now...");
-        
+             
         button = (Button) findViewById(R.id.button);
         button.setOnClickListener(new OnClickListener(){
 			@Override
@@ -96,33 +142,30 @@ public class MainActivity extends Activity {
 					@Override
 					public void run() {
 						// TODO Auto-generated method stub
-				        printScreen("***** START apkm *****");
+				        printScreen("***** START apkm *****", LOG);
 
 						//  GET command
-						// String path = SERVER_URL + "resp.json";
-				        String path = "http://192.168.2.169:3000/pull";
-						printScreen("* Connection: " + path); 
+						String path = SERVER_URL + "pull";
+						printScreen("* Connection: " + path, LOG); 
 				        String jsonstring = HttpUtils.getJsonContent(path);  
-				        // printScreen("* Resp:" + jsonstring);
-				        
+			        
 				        int code = Integer.parseInt(JsonTools.getJSON("type", jsonstring));
-				        // printScreen("* Type: " + code + " | 0:NO ACT; 1: INSTALL; 2: UNINSTALL;");  
 				        
 				        switch(code){
 				        	case 0:
 				        		break;
 				        	case 1:	
-				        		printScreen("* START install.");
+				        		printScreen("* START install.", LOG);
 				        		install(jsonstring);
 						        break;
 				        	case 2:
-				        		printScreen("* START uninstall.");
+				        		printScreen("* START uninstall.", LOG);
 				        		uninstall(jsonstring);
 						    default:
 						    	break;
 				        }    
 				        
-						printScreen("\n***** EXIT apkm *****");
+						printScreen("\n***** EXIT apkm *****", LOG);
 //				        activity.finish();
 //						System.exit(0);		        
 					}
@@ -131,11 +174,11 @@ public class MainActivity extends Activity {
         });     
     }
 
-	private void printScreen(String string) {
+	private void printScreen(String string, int type) {
 		// TODO Auto-generated method stub
 		Message msg = Message.obtain();
 		msg.obj = string;   
-		msg.what = 1;
+		msg.what = type;
 		
 		handler.sendMessage(msg);
 	}
@@ -157,24 +200,22 @@ public class MainActivity extends Activity {
 		    	                    .getOutputStream())), true); 
 		    	    // 执行这一句时会弹出对话框（以下程序要求授予最高权限...），要求用户确认。
 		    	    out.println("su root");    
-		    	    // 删除指定的apk. 这个目录在系统中要求有root权限才可以访问的。  
-		    	    // out.println("pm uninstall com.sankuai.meituan"); 
-		    	    
+	    	    
 	        		updateList = JsonTools.getJSONs("list", json); 
-	        		printScreen("** GET UpdateList finish.");
+	        		printScreen("** GET UpdateList finish.", LOG);
 			        
 		    	    for( int i = 0, len = updateList.size(); i < len; i++ ){
 		    	    	String filename = updateList.get(i).getFname();
-		    	    	printScreen("\n** INSTALL " + filename + " start.");
+		    	    	printScreen("\n** INSTALL " + filename + " start.", LOG);
 		    	    	
-		    	    	printScreen("*** DOWNLOAD start.");
+		    	    	printScreen("*** DOWNLOAD start.", LOG);
 		    	    	download(filename);
-		    	    	printScreen("*** DOWNLOAD finish.");
+		    	    	printScreen("*** DOWNLOAD finish.", LOG);
 		    	    	
 		    	    	String path = DOWNLOAD_DIR + filename;
-		    	    	printScreen("*** Excute command: pm install -r " + path);
+		    	    	printScreen("*** Excute command: pm install -r " + path, LOG);
 		    	    	out.println("pm install -r " + path); 
-		    	    	printScreen("** INSTALL " + filename + " finish.");
+		    	    	printScreen("** INSTALL " + filename + " is running.", LOG);
 		    	    }	    
 
 		    	    out.flush();
@@ -184,7 +225,7 @@ public class MainActivity extends Activity {
 		            proc.waitFor();
 
 		    	} catch (Exception e) {   
-		    		printScreen("!!! INSTALL failed.");
+		    		printScreen("!!! INSTALL failed.", ERROR);
 		    	    System.out.println("exception:" + e); 
 		    	}				
 	}
@@ -206,19 +247,18 @@ public class MainActivity extends Activity {
 		    	                    .getOutputStream())), true); 
 		    	    // 执行这一句时会弹出对话框（以下程序要求授予最高权限...），要求用户确认。
 		    	    out.println("su root");    
-		    	    // 删除指定的apk. 这个目录在系统中要求有root权限才可以访问的。  
 		    	    
-	        		updateList = JsonTools.getJSONs("list", json); 
-	        		printScreen("** GET UpdateList finish.");
+		    	    updateList = JsonTools.getJSONs("list", json); 
+	        		printScreen("** GET UpdateList finish.", LOG);
 			        
 		    	    for( int i = 0, len = updateList.size(); i < len; i++ ){
 		    	    	String filename = updateList.get(i).getFname();
 		    	    	String packagename = updateList.get(i).getPname();
 		    	    	
-		    	    	printScreen("\n** UNINSTALL " + filename + " start.");
-		    	    	printScreen("*** Excute command: pm uninstall -r " + packagename);
+		    	    	printScreen("\n** UNINSTALL " + filename + " start.", LOG);
+		    	    	printScreen("*** Excute command: pm uninstall -r " + packagename, LOG);
 			    	    out.println("pm uninstall " + packagename); 
-		    	    	printScreen("** UNINSTALL " + filename + " finish.");
+		    	    	printScreen("** UNINSTALL " + filename + " finish.", LOG);
 		    	    }	    
 
 		    	    out.flush();
@@ -228,7 +268,7 @@ public class MainActivity extends Activity {
 		            proc.waitFor();
 
 		    	} catch (Exception e) {  
-		    		printScreen("!!! UNINSTALL failed.");
+		    		printScreen("!!! UNINSTALL failed.", ERROR);
 		    	    System.out.println("exception:" + e); 
 		    	}				
 	}
@@ -238,18 +278,17 @@ public class MainActivity extends Activity {
 		// TODO Auto-generated method stub
         
     	// 服务器资源地址
-    	String RESOURCE_URL = SERVER_URL + filename;
-    	printScreen("*** GET apk: " + RESOURCE_URL);
+    	String DATA_URL = RESOURCE_URL + filename;
+    	printScreen("*** GET apk: " + DATA_URL, LOG);
    	
     	// 检测目录是否存在
     	File dir = new File(DOWNLOAD_DIR);
 		if (!dir.exists()) {
 			dir.mkdirs();
-			printScreen("*** MKDIR success.");
+			printScreen("*** MKDIR success.", LOG);
 		}
 		
 		String filepath = DOWNLOAD_DIR + filename;
-		// Log.i(TAG, "NEW is " + filename);
     	
 		//如果目标文件已经存在，则删除。产生覆盖旧文件的效果
 		File file = new File(filepath);
@@ -258,7 +297,7 @@ public class MainActivity extends Activity {
 		}
     	
 		try {
-			URL url = new URL(RESOURCE_URL);
+			URL url = new URL(DATA_URL);
 			HttpURLConnection conn = (HttpURLConnection) url.openConnection();
 			conn.setConnectTimeout(5000);
 			conn.setRequestMethod("GET");
@@ -270,18 +309,35 @@ public class MainActivity extends Activity {
 			// 读取到的数据长度   
 			int len;   
 			// 输出的文件流   
-
 			OutputStream os = new FileOutputStream(filepath);   
+			
+			// 获取文件大小
+			long total = conn.getContentLength();
+			long curr = 0;
+			long tmp = 0;
+			int progress = 0;
+			
+			printScreen("*** DOWNLOAD is running...  00%", LOG);        
+			
 			// 开始读取   
 			while ((len = is.read(bs)) != -1) {   
-				os.write(bs, 0, len);   
+				os.write(bs, 0, len); 
+				curr += len;
+				progress = (int) ((float) curr / total * 100);				
+				
+				if( tmp != progress ){
+					// 通知进度条更新     
+					printScreen(progress + "", PROGRESS);   
+					tmp = progress;
+				}
 			}  
+
 			// 完毕，关闭所有链接   
 			os.close();  
 			is.close();	
 		} catch (Exception e) {
 			// TODO Auto-generated catch block
-    		printScreen("!!! DONWLOAD failed.");
+    		printScreen("!!! DONWLOAD failed.", ERROR);
 			e.printStackTrace();
 		}
 	}
@@ -301,6 +357,20 @@ public class MainActivity extends Activity {
             sb.append(POSSIBLE_CHARS.charAt(random.nextInt(POSSIBLE_CHARS.length())));  
         }  
         return sb.toString();  
+	}
+	
+	protected boolean isInstall(Context context, String pname){
+        final PackageManager packageManager = context.getPackageManager();
+        
+        Handler handler = new Handler();
+        // 获取所有已安装程序的包信息
+        List<PackageInfo> pinfo = packageManager.getInstalledPackages(0);
+        for ( int i = 0; i < pinfo.size(); i++ )
+        {
+            if(pinfo.get(i).packageName.equalsIgnoreCase(pname))
+                return true;
+        }
+        return false;
 	}
 
 }
